@@ -4,6 +4,8 @@ use axum::{
     routing::{get, post},
 };
 mod logger;
+mod config;
+mod error;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::debug;
@@ -43,7 +45,8 @@ async fn main() {
         .route("/", get(root))
         .route("/user", post(create_user));
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3333").await.unwrap();
+    let app_port = config::get().server.port();
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", app_port)).await.unwrap();
     let addr = listener.local_addr().unwrap();
     tracing::info!("Server listening on http://{}", addr);
     axum::serve(listener, app).await.unwrap();
