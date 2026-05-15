@@ -1,4 +1,9 @@
-use axum::{Json, extract::rejection::QueryRejection, http::StatusCode, response::IntoResponse};
+use axum::{
+    Json,
+    extract::rejection::{JsonRejection, QueryRejection},
+    http::StatusCode,
+    response::IntoResponse,
+};
 
 use crate::api::response::ApiResponse;
 
@@ -12,6 +17,8 @@ pub enum ApiError {
     ServerError(String),
     #[error("query parse error: {0}")]
     QueryParseError(#[from] QueryRejection),
+    #[error("json parse error: {0}")]
+    JsonParseError(#[from] JsonRejection),
     #[error("validation error: {0}")]
     ValidationError(String),
 }
@@ -34,6 +41,9 @@ impl IntoResponse for ApiError {
                 (StatusCode::OK, Json(ApiResponse::<()>::err(e.to_string()))).into_response()
             }
             ApiError::ValidationError(e) => {
+                (StatusCode::OK, Json(ApiResponse::<()>::err(e.to_string()))).into_response()
+            }
+            ApiError::JsonParseError(e) => {
                 (StatusCode::OK, Json(ApiResponse::<()>::err(e.to_string()))).into_response()
             }
         }
