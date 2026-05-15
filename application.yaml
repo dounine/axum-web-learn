@@ -1,2 +1,6 @@
 server:
   port: 3333
+  #请求限制大小mb
+  body_limit: 10
+  #超时时间秒
+  timeout: 10
