@@ -1,8 +1,9 @@
 use axum::{
     Json,
+    body::Body,
     extract::rejection::{JsonRejection, QueryRejection},
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, Response},
 };
 
 use crate::api::response::ApiResponse;
@@ -21,6 +22,12 @@ pub enum ApiError {
     JsonParseError(#[from] JsonRejection),
     #[error("validation error: {0}")]
     ValidationError(String),
+    #[error("auth error: {0}")]
+    AuthError(#[from] jsonwebtoken::errors::Error),
+    #[error("unauthorized")]
+    Unauthorized(String),
+    #[error("{0}")]
+    Error(String),
 }
 
 impl IntoResponse for ApiError {
@@ -46,6 +53,21 @@ impl IntoResponse for ApiError {
             ApiError::JsonParseError(e) => {
                 (StatusCode::OK, Json(ApiResponse::<()>::err(e.to_string()))).into_response()
             }
+            ApiError::AuthError(e) => {
+                (StatusCode::OK, Json(ApiResponse::<()>::err(e.to_string()))).into_response()
+            }
+            ApiError::Unauthorized(e) => {
+                (StatusCode::OK, Json(ApiResponse::<()>::err(e.to_string()))).into_response()
+            }
+            ApiError::Error(e) => {
+                (StatusCode::OK, Json(ApiResponse::<()>::err(e.to_string()))).into_response()
+            }
         }
+    }
+}
+
+impl From<ApiError> for Response<Body> {
+    fn from(value: ApiError) -> Self {
+        value.into_response()
     }
 }

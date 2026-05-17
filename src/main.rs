@@ -7,6 +7,8 @@ mod logger;
 mod server;
 mod common;
 mod handler;
+mod auth;
+mod middleware;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

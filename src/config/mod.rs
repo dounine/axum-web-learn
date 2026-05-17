@@ -5,11 +5,14 @@ use serde::Deserialize;
 
 use crate::error::ApiError;
 
+pub mod jwt;
 pub mod server;
+
 static APP_CONFIG: LazyLock<AppConfig> = LazyLock::new(|| AppConfig::load().unwrap());
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 pub struct AppConfig {
     pub server: server::ServerConfig,
+    pub jwt: jwt::JwtConfig,
 }
 impl AppConfig {
     pub fn load() -> Result<Self, ApiError> {

@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 pub struct ServerConfig {
     port: Option<u16>,
     body_limit: Option<u64>,

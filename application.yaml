@@ -2,5 +2,12 @@ server:
   port: 3333
   #请求限制大小mb
   body_limit: 10
-  #超时时间秒
+  #超时时间(秒)
   timeout: 10
+jwt:
+  #JWT密钥(请修改)
+  secret: "123456"
+  audience: "localhost"
+  issuer: "localhost"
+  #登录过期时间(秒)
+  expiration: 3600

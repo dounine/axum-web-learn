@@ -1,19 +1,19 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use axum::{
-    Router,
+    Extension, Router,
     http::{Method, StatusCode},
 };
 use bytesize::ByteSize;
 use tower_http::{
     cors::{Any, CorsLayer},
     limit::RequestBodyLimitLayer,
-    normalize_path::{NormalizePathLayer},
+    normalize_path::NormalizePathLayer,
     timeout::TimeoutLayer,
 };
 use tracing::info;
 
-use crate::{api, app::AppState, config::server::ServerConfig, error::ApiError};
+use crate::{api, app::AppState, auth::Jwt, config::server::ServerConfig, error::ApiError};
 
 pub struct Server {
     config: &'static ServerConfig,
@@ -67,9 +67,11 @@ impl Server {
             .max_age(Duration::from_hours(24));
 
         let normalize_path = NormalizePathLayer::trim_trailing_slash();
+        let jwt = Arc::new(Jwt::new(&crate::config::get().jwt));
 
         Router::new()
             .merge(api::router())
+            .layer(Extension(jwt))
             .layer(timeout)
             .layer(body_limit)
             .layer(cors)
