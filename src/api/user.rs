@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    Extension, Json, Router,
+    Extension, Router,
     extract::State,
     routing::{get, post},
 };
@@ -48,7 +48,7 @@ pub async fn login(
 }
 pub async fn users(
     ValidQuery(params): ValidQuery<PaginationParams>,
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
 ) -> ApiResponse<'static, ()> {
     debug!("params: {:?}", params);
     ApiResponse {
@@ -58,7 +58,7 @@ pub async fn users(
     }
 }
 
-pub async fn user_info(State(state): State<AppState>) -> ApiResponse<'static, ()> {
+pub async fn user_info(State(_state): State<AppState>) -> ApiResponse<'static, ()> {
     ApiResponse {
         ok: true,
         msg: None,
@@ -67,7 +67,7 @@ pub async fn user_info(State(state): State<AppState>) -> ApiResponse<'static, ()
 }
 
 pub async fn create_user(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
 ) -> ApiResponse<'static, ()> {
     ApiResponse {
         ok: true,

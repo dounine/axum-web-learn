@@ -1,6 +1,6 @@
 use std::{
     pin::Pin,
-    sync::{Arc, LazyLock},
+    sync::{Arc},
 };
 
 use axum::{
@@ -11,7 +11,7 @@ use axum::{
 };
 use tower_http::auth::{AsyncAuthorizeRequest, AsyncRequireAuthorizationLayer};
 
-use crate::{app::AppState, auth::Jwt, error::ApiError};
+use crate::{auth::Jwt, error::ApiError};
 
 #[derive(Clone)]
 pub struct AuthLayer {}
@@ -36,7 +36,7 @@ impl AsyncAuthorizeRequest<Body> for AuthLayer {
                 .map(|value: &HeaderValue| {
                     value
                         .to_str()
-                        .map_err(|e| {
+                        .map_err(|_e| {
                             ApiError::Unauthorized("authorization value is invalid".to_string())
                         })?
                         .strip_prefix("Bearer ")

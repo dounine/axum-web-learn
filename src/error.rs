@@ -28,6 +28,10 @@ pub enum ApiError {
     Unauthorized(String),
     #[error("{0}")]
     Error(String),
+    #[error(transparent)]
+    QrError(#[from] qrcode::types::QrError),
+    #[error(transparent)]
+    ImageError(#[from] image::ImageError),
 }
 
 impl IntoResponse for ApiError {
@@ -60,6 +64,12 @@ impl IntoResponse for ApiError {
                 (StatusCode::OK, Json(ApiResponse::<()>::err(e.to_string()))).into_response()
             }
             ApiError::Error(e) => {
+                (StatusCode::OK, Json(ApiResponse::<()>::err(e.to_string()))).into_response()
+            }
+            ApiError::QrError(e) => {
+                (StatusCode::OK, Json(ApiResponse::<()>::err(e.to_string()))).into_response()
+            }
+            ApiError::ImageError(e) => {
                 (StatusCode::OK, Json(ApiResponse::<()>::err(e.to_string()))).into_response()
             }
         }
