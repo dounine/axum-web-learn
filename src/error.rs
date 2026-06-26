@@ -32,6 +32,8 @@ pub enum ApiError {
     QrError(#[from] qrcode::types::QrError),
     #[error(transparent)]
     ImageError(#[from] image::ImageError),
+    #[error(transparent)]
+    FastSignError(#[from] fast_sign::error::SignError),
 }
 
 impl IntoResponse for ApiError {
@@ -70,6 +72,9 @@ impl IntoResponse for ApiError {
                 (StatusCode::OK, Json(ApiResponse::<()>::err(e.to_string()))).into_response()
             }
             ApiError::ImageError(e) => {
+                (StatusCode::OK, Json(ApiResponse::<()>::err(e.to_string()))).into_response()
+            }
+            ApiError::FastSignError(e) => {
                 (StatusCode::OK, Json(ApiResponse::<()>::err(e.to_string()))).into_response()
             }
         }

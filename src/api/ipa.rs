@@ -1,17 +1,32 @@
-use std::{io::Cursor, vec};
+use std::{
+    io::Cursor,
+    path::{Path, PathBuf},
+    str::FromStr,
+    vec,
+};
 
 use axum::{
     Router,
     body::Body,
-    http::{HeaderValue, Response, StatusCode, header},
+    http::{
+        HeaderValue, Response, StatusCode,
+        header::{self, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_TYPE},
+    },
     response::IntoResponse,
-    routing::get,
+    routing::{get, head},
+};
+use fast_sign::{
+    data::{Data, StreamConfig},
+    util::ipa_util,
 };
 use serde::Deserialize;
+use tokio::io::{AsyncWriteExt, duplex};
+use tokio_util::io::ReaderStream;
 use validator::Validate;
 
 use crate::{
     app::AppState,
+    error::ApiError,
     handler::valid_query::ValidQuery,
     util::qrcode_util::{QrcodeRender, QrcodeUtil},
 };
@@ -21,6 +36,128 @@ pub fn router() -> Router<AppState> {
         .route("/install.plist", get(install_plist))
         .route("/qrcode.png", get(qrcode_png))
         .route("/red", get(redirect_url))
+        .route("/download", get(download_ipa))
+        .route("/download", head(download_head))
+}
+async fn get_dir_size<P: AsRef<Path>>(path: P) -> std::io::Result<u64> {
+    let mut total_size = 0u64;
+    let mut dir_stack = vec![path.as_ref().to_path_buf()];
+
+    while let Some(current_dir) = dir_stack.pop() {
+        let entries = std::fs::read_dir(&current_dir)?;
+
+        for entry in entries {
+            let entry = entry?;
+            let metadata = entry.metadata()?;
+
+            if metadata.is_file() {
+                total_size += metadata.len();
+            } else if metadata.is_dir() {
+                dir_stack.push(entry.path());
+            }
+            // 可选：处理符号链接
+            // else if metadata.file_type()?.is_symlink() {
+            //     // 根据需要决定是否跟随符号链接
+            // }
+        }
+    }
+
+    Ok(total_size)
+}
+async fn download_head() -> impl IntoResponse {
+    let path = PathBuf::from_str("/Users/lake/dounine/github/ipa/fast-sign/data/Payload").unwrap();
+    let total_bytes = get_dir_size(&path).await.unwrap();
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(
+            CONTENT_TYPE,
+            HeaderValue::from_static("application/x-itunes-ipa"),
+        )
+        .header(
+            CONTENT_LENGTH,
+            HeaderValue::from_str(&(total_bytes / 2).to_string()).unwrap(),
+        )
+        .body(Body::empty())
+        .unwrap()
+}
+
+async fn download_ipa() -> impl IntoResponse {
+    // 创建一个双向管道，容量为4096字节
+    let (writer, reader) = duplex(4096);
+    let path = PathBuf::from_str("/Users/lake/dounine/github/ipa/fast-sign/data/Payload").unwrap();
+    let p = path.clone();
+    // 在另一个任务中执行压缩
+    tokio::spawn(async move {
+        let mut data_config = StreamConfig::default();
+        data_config.mem = Some(false);
+        let mut ipa = ipa_util::dir_to_zip(&p, &data_config).await?;
+        let mut writer2 = Data::from_tokio_stream(writer, data_config.clone());
+
+        ipa.enable_crc32_computer();
+        // let mut writer = Data::from MyWriter::new(writer, data_config.clone());
+        let level = fast_sign::CompressionLevel::NoCompression;
+        // let mut output: Data = Data::from_lazy_path_for_role(
+        //     &PathBuf::from_str("./signed.ipa").unwrap(),
+        //     true,
+        //     true,
+        //     true,
+        //     data_config.clone(),
+        // );
+        // ipa.package_with_tokio_callback(&mut output, level, &mut |a, b| Box::pin(async move {
+        //     Ok(())
+        // }))
+        //     .await
+        //     .unwrap();
+        ipa.package_with_tokio_callback(&mut writer2, level, &mut |a, b| {
+            Box::pin(async move { Ok(()) })
+        })
+        .await
+        .unwrap();
+
+        if let Data::TokioStream { inner, .. } = &mut writer2 {
+            inner.flush().await.unwrap();
+            inner.shutdown().await.unwrap();
+        }
+
+        // writer.shutdown().await.unwrap();
+        // 打开要压缩的文件
+        // let mut file = File::open("example.txt").await?;
+        // let mut zip_writer = ZipFileWriter::new(&mut writer);
+
+        // // 添加一个条目到zip文件
+        // let entry_builder = ZipEntryBuilder::new("example.txt".into(), Compression::Deflate);
+        // zip_writer
+        //     .write_entry_whole(entry_builder, &mut file)
+        //     .await?;
+
+        // // 关闭zip writer，这会写入中央目录
+        // zip_writer.close().await?;
+
+        // 关闭写入端，这样reader会读到EOF
+        // writer.shutdown().await?;
+        //
+
+        Ok::<_, ApiError>(())
+    });
+
+    // 将reader转换为流
+    let stream = ReaderStream::new(reader);
+    let body = Body::from_stream(stream);
+
+    let total_bytes = get_dir_size(&path).await.unwrap();
+    // // 构建响应，设置适当的头
+    let response = axum::response::Response::builder()
+        .header(CONTENT_TYPE, "application/x-itunes-ipa")
+        // .header(
+        //     CONTENT_LENGTH,
+        //     HeaderValue::from_str(&(total_bytes / 2).to_string()).unwrap(),
+        // )
+        .header(CONTENT_DISPOSITION, "attachment; filename=\"download.ipa\"")
+        .body(body)
+        .unwrap();
+    response.into_response()
+    // ([(CONTENT_TYPE, "application/octet-stream")], body)
 }
 #[derive(Debug, Deserialize, Validate)]
 pub struct PlistParams {
@@ -115,15 +252,11 @@ async fn qrcode_png() -> impl IntoResponse {
             }
 
             let mut resp = Response::new(axum::body::Body::from(data.into_inner()));
-            resp.headers_mut().insert(
-                header::CONTENT_TYPE,
-                HeaderValue::from_static("image/png"),
-            );
-            return resp
+            resp.headers_mut()
+                .insert(header::CONTENT_TYPE, HeaderValue::from_static("image/png"));
+            return resp;
         }
-        Err(e) => {
-            return (StatusCode::BAD_REQUEST, e.to_string()).into_response()
-        }
+        Err(e) => return (StatusCode::BAD_REQUEST, e.to_string()).into_response(),
     }
 }
 async fn install_plist(ValidQuery(params): ValidQuery<PlistParams>) -> impl IntoResponse {
